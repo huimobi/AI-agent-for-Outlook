@@ -4,6 +4,8 @@ import email
 from email.header import decode_header
 import os
 from bs4 import BeautifulSoup
+import requests
+import json
 
 #First create a .env file with EMAIL and PASSWORD variables
 
@@ -14,6 +16,31 @@ PASSWORD=os.getenv("PASSWORD")
 
 #set gmail server
 IMAP_SERVER = "imap.gmail.com"
+
+
+def stream_ollama(prompt, model="deepseek-r1:8b"):
+    url = "http://localhost:11434/api/generate"
+    headers = {"Content-Type": "application/json"}
+    data = {
+        "model": model,
+        "prompt": "sumarize this text:\n"+prompt,
+        "stream": True
+    }
+
+    thinking=False
+    with requests.post(url, headers=headers, json=data, stream=True) as response:
+        for line in response.iter_lines():
+            if line:
+                if json.loads(line)["response"]=="<think>":
+                    thinking=True
+                    print("(deepseek analyzing)")
+                elif json.loads(line)["response"]=="</think>":
+                    thinking=False
+                    continue
+
+                if not thinking:
+                    print(json.loads(line)["response"], end="", flush=True)
+
 
 
 def text_extract(html):
@@ -69,14 +96,14 @@ def read_emails():
                         if part.get_content_type() == "text/plain":
                             body = part.get_payload(decode=True).decode(errors='ignore')
                             body=text_extract(body)
-                            print(f"Message:\n\n{body}\n\n")
+                            stream_ollama(body)
                             break
                 else:
                     body = msg.get_payload(decode=True).decode(errors='ignore')
                     body=text_extract(body)
-                    print(f"Message:\n\n{body}\n\n")
+                    stream_ollama(body)
     
-    print("Thats all for today.\nBye!!")
+    print("\nThats all for today.\nBye!!")
     #disconnect from server
     mail.logout()
 
